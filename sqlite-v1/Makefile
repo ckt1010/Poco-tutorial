@@ -2,7 +2,7 @@
 # Makefile for a execute
 #
 CC=g++
-APP=sqlit-v1
+APP=sqlite-v1
 
 INC=-I/usr/local/Cellar/poco/1.9.0_1/include
 LIBS=-L/usr/local/opt/poco/lib/

@@ -4,13 +4,14 @@
 #include <iostream>
 
 using namespace Poco::Data::Keywords;
+using namespace std;
 using Poco::Data::Session;
 using Poco::Data::Statement;
 
 struct Person
 {
-    std::string name;
-    std::string address;
+    string name;
+    string address;
     int         age;
 };
 
