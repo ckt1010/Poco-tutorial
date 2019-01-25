@@ -59,7 +59,7 @@ int main(int argc, char** argv)
     Statement select(session);
     std::ostringstream oss;
     Poco::Data::CLOB buffer2;
-    select << "SELECT Name, Photo FROM Person",
+    select << "SELECT * FROM Person",
     into(name),
     into(buffer2),
     range(0, 1);
