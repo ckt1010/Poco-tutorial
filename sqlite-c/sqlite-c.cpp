@@ -20,7 +20,7 @@ typedef struct {
     string nickName;
     Poco::Data::LOB<uint8_t> photo;
     Poco::Data::LOB<uint8_t> feature; 
-} driversCenter;
+} driverCenterTable;
 
 POCO_DECLARE_EXCEPTION(, SQLException, Poco::Exception)
 
@@ -35,9 +35,9 @@ class DriverCenter {
         return count;
     }
 
-    int32_t GetDriversInfo(std::vector<driversCenter> &driversCenters) {
+    int32_t GetDriversInfo(std::vector<driverCenterTable> &driversCenters) {
         Statement select(*session);
-        driversCenter driversCentersTmp;
+        driverCenterTable driversCentersTmp;
         uint32_t count = 0;
         select << "SELECT * FROM DRIVERS", into(driversCentersTmp.name),
             into(driversCentersTmp.nickName), into(driversCentersTmp.photo),
@@ -83,7 +83,7 @@ class DriverCenter {
         return 0;
     }
 
-    int32_t RegisterDriver(driversCenter driverInfo) {
+    int32_t RegisterDriver(driverCenterTable driverInfo) {
         try {
             *session << "INSERT INTO DRIVERS(name, nickName, photo, feature) "
                      << "VALUES(?, ?, ?, ?)",
@@ -109,7 +109,7 @@ class DriverCenter {
 
     DriverCenter() {
         // regist SQLite connector
-        Poco::Data::SQLite::Connector::registerConnector();
+        connector.registerConnector();
         // create a session
         cout << "DriverCenter start up!" << endl;
         session = new Session("SQLite", "DriverCenter.db");
@@ -119,12 +119,19 @@ class DriverCenter {
             now;
     }
     ~DriverCenter() {
-        Poco::Data::SQLite::Connector::unregisterConnector();
+        try {
+            connector.unregisterConnector();
+        } catch (Poco::SystemException &ex) {
+             cout << ex.displayText() << endl;
+        }
+        // delete a session
+        cout << "DriverCenter stop!" << endl;
         delete session;
     }
 
   private:
     Session *session;
+    Poco::Data::SQLite::Connector connector;
 };
 
 
@@ -143,7 +150,7 @@ uint32_t DriverCenter_getCount() {
     return DriverCenter::instance().GetCount();
 }
 
-uint32_t DriverCenter_getFeature(uint8_t *feature, char *driverName) {
+uint32_t DriverCenter_getFeature(uint8_t *feature, uint32_t featureLength, char *driverName) {
     if(NULL == feature) {
         cout << "Invalid feature buffer for GetFeature" << endl;
         return -1;
@@ -155,14 +162,16 @@ uint32_t DriverCenter_getFeature(uint8_t *feature, char *driverName) {
 
     Poco::Data::LOB<uint8_t> featureTmp;
     string driverNameTmp(driverName);
-    uint32_t status;
+    uint32_t status, cpyLength = 0;
 
     status =  DriverCenter::instance().GetFeature(&featureTmp, driverNameTmp);
-    memcpy(feature, &featureTmp, featureTmp.size());
+    cout << featureTmp.rawContent() << endl;
+    cpyLength = min((size_t)featureLength, featureTmp.size());
+    memcpy(feature, featureTmp.rawContent(), cpyLength);
     return status;
 }
 
-uint32_t DriverCenter_getPhoto(uint8_t *photo, char *driverName) {
+uint32_t DriverCenter_getPhoto(uint8_t *photo, uint32_t photoLength, char *driverName) {
     if(NULL == photo) {
         cout << "Invalid photo buffer for GetPhoto" << endl;
         return -1;
@@ -174,10 +183,11 @@ uint32_t DriverCenter_getPhoto(uint8_t *photo, char *driverName) {
 
     Poco::Data::LOB<uint8_t> photoTmp;
     string driverNameTmp(driverName);
-    uint32_t status;
+    uint32_t status, cpyLength = 0;
 
     status =  DriverCenter::instance().GetPhoto(&photoTmp, driverNameTmp);
-    memcpy(photo, &photoTmp, photoTmp.size());
+    cpyLength = min((size_t)photoLength, photoTmp.size());
+    memcpy(photo, photoTmp.rawContent(), cpyLength);
     return status;
 }
 
@@ -186,38 +196,44 @@ uint32_t DriverCenter_getDriverInfo(driverInfo *driverInfos, uint32_t driverInfo
         cout << "Invalid driverInfos buffer" << endl;
         return -1;
     }
-    std::vector<driversCenter> driverInfosTmp;
+    std::vector<driverCenterTable> driverInfosTmp;
     uint32_t status;
     status = DriverCenter::instance().GetDriversInfo(driverInfosTmp);
     
     uint32_t memcpyLength = min(driverInfosTmp.size(), (size_t)driverInfoLength);
 
-    for(uint32_t i = 0; i < memcpyLength; i++){
+    for (uint32_t i = 0; i < memcpyLength; i++) {
         strncpy(driverInfos[i].name, driverInfosTmp[i].name.c_str(),
                 DRIVERCENTER_MAX_NAME_LENGTH);
         strncpy(driverInfos[i].nickName, driverInfosTmp[i].nickName.c_str(),
                 DRIVERCENTER_MAX_NAME_LENGTH);
-        memcpy(driverInfos[i].feature, &(driverInfosTmp[i].feature),
-               driverInfosTmp[i].feature.size());
-        driverInfos[i].featureLength = driverInfosTmp[i].feature.size();
-        memcpy(driverInfos[i].photo, &(driverInfosTmp[i].photo), driverInfosTmp[i].photo.size());
-        driverInfos[i].photoLength = driverInfosTmp[i].photo.size();
+        driverInfos[i].featureLength =
+            min((size_t)driverInfos[i].featureSize, driverInfosTmp[i].feature.size());
+        memcpy(driverInfos[i].feature, driverInfosTmp[i].feature.rawContent(),
+               driverInfos[i].featureLength);
+        driverInfos[i].photoLength =
+            min(driverInfosTmp[i].photo.size(), (size_t)driverInfos[i].photoSize);
+        memcpy(driverInfos[i].photo, driverInfosTmp[i].photo.rawContent(),
+               driverInfos[i].photoLength);
     }
     return status;
 }
 
 uint32_t DriverCenter_registerDriver(driverInfo driverInfo) {
-    driversCenter driverInfoTmp;
+    driverCenterTable driverInfoTmp;
 
     driverInfoTmp.name.assign(driverInfo.name);
     driverInfoTmp.nickName.assign(driverInfo.nickName);
     if(NULL != driverInfo.feature) {
-        memcpy(&(driverInfoTmp.feature), driverInfo.feature, driverInfo.featureLength);
+        driverInfoTmp.feature = Poco::Data::LOB<uint8_t>(
+            driverInfo.feature, driverInfo.featureLength);
     }
     if(NULL != driverInfo.photo) {
-        memcpy(&(driverInfoTmp.photo), driverInfo.photo, driverInfo.photoLength);
+        driverInfoTmp.photo = Poco::Data::LOB<uint8_t>(
+            driverInfo.photo, driverInfo.photoLength);
     }
     return DriverCenter::instance().RegisterDriver(driverInfoTmp);
+    return 0;
 }
 
 uint32_t DriverCenter_deleteDriver(char *driverName) {
@@ -228,4 +244,8 @@ uint32_t DriverCenter_deleteDriver(char *driverName) {
     string driverNameTmp(driverName);
 
     return DriverCenter::instance().DeleteDriver(driverNameTmp);
+}
+
+void DriverCenter_stop() {
+    sh.reset();
 }
