@@ -3,8 +3,11 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 void printDriverInfo(driverInfo *printDriverInfo, uint32_t printLength) {
+	struct timespec beforeTime, afterTime;
+	uint64_t execute_time;
     printf("Print driverInfo:");
     for (uint8_t i = 0; i < printLength; i++) {
         printf("name %s, nickName %s\n", printDriverInfo[i].name,
@@ -19,8 +22,12 @@ void printDriverInfo(driverInfo *printDriverInfo, uint32_t printLength) {
                      printDriverInfo[i].nickName);
 			printf("photoLength: %u\n", printDriverInfo[i].photoLength);
             FILE *file = fopen(fileName, "wb");
+			clock_gettime(CLOCK_REALTIME,&beforeTime);
             fwrite(printDriverInfo[i].photo, printDriverInfo[i].photoLength, 1,
                    file);
+			clock_gettime(CLOCK_REALTIME,&afterTime);
+			execute_time = afterTime.tv_nsec - beforeTime.tv_nsec;
+			printf("Write file execute time: %llu\n", execute_time);
             fclose(file);
         }
     }
@@ -29,6 +36,9 @@ void printDriverInfo(driverInfo *printDriverInfo, uint32_t printLength) {
 void insertDriverInfo(char *name, char *nickName, char *feature) {
 	FILE *photoFile;
 	driverInfo driverInfoSet;
+	struct timespec beforeTime, afterTime;
+	uint64_t execute_time;
+
     uint32_t photoFilePtr = 0;
     strcpy(driverInfoSet.name, name);
     strcpy(driverInfoSet.nickName, nickName);
@@ -39,12 +49,22 @@ void insertDriverInfo(char *name, char *nickName, char *feature) {
     driverInfoSet.photo = (uint8_t *)malloc(100 * 1000 * 1000);
 	driverInfoSet.photoSize = 100 * 1000 * 1000;
     photoFile = fopen("./1.jpg", "rb");
+
+	clock_gettime(CLOCK_REALTIME,&beforeTime);
     while (1000 == fread(&driverInfoSet.photo[photoFilePtr], 1, 1000, photoFile)) {
         photoFilePtr += 1000;
     }
+	clock_gettime(CLOCK_REALTIME,&afterTime);
+	execute_time = afterTime.tv_nsec - beforeTime.tv_nsec;
+	printf("Read file execute time: %llu\n", execute_time);
     driverInfoSet.photoLength = photoFilePtr;
     fclose(photoFile);
+
+	clock_gettime(CLOCK_REALTIME,&beforeTime);
     DriverCenter_registerDriver(driverInfoSet);
+	clock_gettime(CLOCK_REALTIME,&afterTime);
+	execute_time = afterTime.tv_nsec - beforeTime.tv_nsec;
+	printf("Insert execute time: %llu\n", execute_time);
 	free(driverInfoSet.feature);
     free(driverInfoSet.photo);
 }
@@ -96,7 +116,13 @@ int main() {
  	insertDriverInfo("test4", "test4_nickName", "test4 feature input");
     count = DriverCenter_getCount();
     printf("count: %u\n", count);
+	struct timespec beforeTime, afterTime;
+	uint64_t execute_time;
+	clock_gettime(CLOCK_REALTIME,&beforeTime);
 	DriverCenter_getPhoto(photo, 20000, "test4");
+	clock_gettime(CLOCK_REALTIME,&afterTime);
+	execute_time = afterTime.tv_nsec - beforeTime.tv_nsec;
+	printf("select execute time: %llu\n", execute_time);
 	FILE *file = fopen("test4.jpg", "wb");
     fwrite(photo, 20000, 1, file);
     fclose(file);
