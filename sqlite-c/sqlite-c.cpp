@@ -2,6 +2,7 @@
 #include "Poco/SingletonHolder.h"
 #include "Poco/Data/SQLite/Connector.h"
 #include "Poco/Data/SQLite/SQLiteException.h"
+#include "Poco/Data/SQLite/Utility.h"
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -112,7 +113,12 @@ class DriverCenter {
         connector.registerConnector();
         // create a session
         cout << "DriverCenter start up!" << endl;
-        session = new Session("SQLite", "DriverCenter.db");
+        session = new Session("SQLite", ":memory:");
+        bool isFileToMemory = Poco::Data::SQLite::Utility::fileToMemory(*session, dataBasePath);
+        if (false == isFileToMemory) {
+            cout << "DriverCenter fileToMemory failed" << endl;
+        }
+        
         // may create table
         *session << "CREATE TABLE IF NOT EXISTS DRIVERS"
             << "(name VARCHAR PRIMARY KEY, nickName VARCHAR, photo BLOB, feature BLOB)",
@@ -126,11 +132,16 @@ class DriverCenter {
         }
         // delete a session
         cout << "DriverCenter stop!" << endl;
+        bool isMemoryToFile = Poco::Data::SQLite::Utility::memoryToFile(dataBasePath, *session);
+        if (false == isMemoryToFile) {
+            cout << "DriverCenter memoryToFile failed" << endl;
+        }
         delete session;
     }
 
   private:
     Session *session;
+    string dataBasePath = "DriverCenter.db";
     Poco::Data::SQLite::Connector connector;
 };
 
